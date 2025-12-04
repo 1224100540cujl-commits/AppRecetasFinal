@@ -113,6 +113,10 @@
         <activity
             android:name=".ui.media.RecipeMediaActivity"
             android:exported="false" />
+        <activity
+            android:name=".ui.collections.CollectionDetailActivity"
+            android:exported="false"
+            android:theme="@style/Theme.RecetasApp" />
 
     </application>
 

@@ -17,10 +17,9 @@ import com.recetas.app.data.model.*
         Tag::class,
         RecipeTag::class,
         Notification::class,
-        UserStats::class,
         RecipeMedia::class
     ],
-    version = 8,
+    version = 7,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

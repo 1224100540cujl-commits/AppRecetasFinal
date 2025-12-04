@@ -6,11 +6,10 @@ plugins {
 
 android {
     namespace = "com.recetas.app"
-    compileSdk {
-        version = release(36)
-        buildFeatures {
-            viewBinding = true
-        }
+    compileSdk = 36
+
+    buildFeatures {
+        viewBinding = true
     }
 
     defaultConfig {
@@ -32,10 +31,12 @@ android {
             )
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+
     kotlinOptions {
         jvmTarget = "11"
     }
@@ -69,4 +70,5 @@ dependencies {
     implementation("androidx.viewpager2:viewpager2:1.0.0")
 
     implementation("com.github.bumptech.glide:glide:4.16.0")
+
 }
