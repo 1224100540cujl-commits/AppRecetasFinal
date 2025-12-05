@@ -199,7 +199,7 @@ Contiene todas las Activities y Adapters:
 ### Opción 1: Clonar desde GitHub
 ```bash
 # Clonar el repositorio
-git clone https://github.com/cristian-y-david/RecetApp.git
+git clone https://github.com/1224100540cujl-commits/AppRecetasFinal.git
 
 # Navegar al directorio del proyecto
 cd RecetApp
@@ -213,7 +213,7 @@ cd RecetApp
 
 ### Opción 2: Descargar APK
 
-1. Ve a la sección [Releases](https://github.com/cristian-y-david/RecetApp/releases)
+1. Ve a la sección [Releases]
 2. Descarga el archivo `RecetApp-v1.0.apk`
 3. Transfiere el APK a tu dispositivo Android
 4. Habilita instalación de fuentes desconocidas:
@@ -223,7 +223,7 @@ cd RecetApp
 ### Opción 3: Compilar desde Código Fuente
 ```bash
 # Clonar repositorio
-git clone https://github.com/cristian-y-david/RecetApp.git
+git clone https://github.com/1224100540cujl-commits/AppRecetasFinal.git
 cd RecetApp
 
 # Compilar APK Debug
@@ -974,7 +974,7 @@ Esto permite almacenar objetos Date como Long en SQLite.
 1. Fork del Repositorio
 bash# Haz clic en "Fork" en GitHub
 # Luego clona tu fork
-git clone https://github.com/cristian-y-david/RecetApp.git
+git clone https://github.com/1224100540cujl-commits/AppRecetasFinal.git
 cd RecetApp
 2. Crear una Rama
 bash# Crea una rama para tu feature o bugfix
@@ -1101,11 +1101,11 @@ SOFTWARE.
 Desarrolladores
 
 Cristian y David
-GitHub: @cristian-y-david
+GitHub: @1224100540cujl-commits  @crizzz77
 
 Links del Proyecto
 
-Repositorio: github.com/cristian-y-david/RecetApp
+Repositorio: https://github.com/1224100540cujl-commits/AppRecetasFinal.git
 
 Reportar Bugs
 Si encuentras un bug, por favor:
