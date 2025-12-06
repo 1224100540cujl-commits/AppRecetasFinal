@@ -969,6 +969,1617 @@ kotlinclass Converters {
 }
 Esto permite almacenar objetos Date como Long en SQLite.
 
+Codigo con comentarios KDoc
+### 1. Entity - Modelo de Receta
+```kotlin
+package com.recetas.app.data.model
+
+import androidx.room.ColumnInfo
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+
+/**
+ * Entidad que representa una receta en la base de datos Room.
+ * 
+ * Esta clase define el esquema de la tabla "recipes" en SQLite,
+ * almacenando toda la información necesaria de una receta.
+ *
+ * @property id Identificador único autogenerado para cada receta
+ * @property name Nombre descriptivo de la receta (ej: "Tacos al Pastor")
+ * @property category Categoría culinaria (Mexicana, Italiana, Japonesa, etc.)
+ * @property time Tiempo estimado de preparación en formato texto (ej: "30 min")
+ * @property servings Número de porciones que produce la receta
+ * @property difficulty Nivel de dificultad: "Fácil", "Media" o "Difícil"
+ * @property ingredients Lista de ingredientes separados por comas
+ * @property instructions Pasos de preparación en formato texto
+ * @property imageUrl URL de imagen o emoji representativo de la receta
+ * @property isFavorite Indica si el usuario marcó esta receta como favorita
+ *
+ * @author Cristian y David
+ * @since 1.0
+ */
+@Entity(tableName = "recipes")
+data class Recipe(
+    @PrimaryKey(autoGenerate = true)
+    val id: Int = 0,
+
+    @ColumnInfo(name = "name")
+    val name: String,
+
+    @ColumnInfo(name = "category")
+    val category: String,
+
+    @ColumnInfo(name = "time")
+    val time: String,
+
+    @ColumnInfo(name = "servings")
+    val servings: Int,
+
+    @ColumnInfo(name = "difficulty")
+    val difficulty: String,
+
+    @ColumnInfo(name = "ingredients")
+    val ingredients: String,
+
+    @ColumnInfo(name = "instructions")
+    val instructions: String,
+
+    @ColumnInfo(name = "image_url")
+    val imageUrl: String? = null,
+
+    @ColumnInfo(name = "is_favorite")
+    val isFavorite: Boolean = false
+)
+```
+
+---
+
+### 2. DAO - Interfaz de Acceso a Datos
+```kotlin
+package com.recetas.app.data.local.dao
+
+import androidx.lifecycle.LiveData
+import androidx.room.*
+import com.recetas.app.data.model.Recipe
+
+/**
+ * Data Access Object para operaciones CRUD de recetas.
+ * 
+ * Room genera automáticamente la implementación de esta interfaz,
+ * proporcionando acceso seguro y eficiente a la base de datos.
+ * Todas las operaciones suspend se ejecutan en un hilo de fondo.
+ *
+ * @author Cristian y David
+ * @since 1.0
+ */
+@Dao
+interface RecipeDao {
+    
+    /**
+     * Inserta una nueva receta en la base de datos.
+     * 
+     * @param recipe La receta a insertar
+     * @throws SQLiteConstraintException si hay conflicto de claves
+     */
+    @Insert
+    suspend fun insert(recipe: Recipe)
+
+    /**
+     * Actualiza una receta existente en la base de datos.
+     * 
+     * @param recipe La receta con los datos actualizados
+     * @return Número de filas afectadas (0 si no existe)
+     */
+    @Update
+    suspend fun update(recipe: Recipe)
+
+    /**
+     * Elimina una receta de la base de datos.
+     * 
+     * @param recipe La receta a eliminar
+     */
+    @Delete
+    suspend fun delete(recipe: Recipe)
+
+    /**
+     * Obtiene todas las recetas ordenadas alfabéticamente.
+     * 
+     * @return LiveData que emite la lista de recetas automáticamente
+     * cuando hay cambios en la base de datos
+     */
+    @Query("SELECT * FROM recipes ORDER BY name ASC")
+    fun getAllRecipes(): LiveData<List>
+
+    /**
+     * Busca una receta específica por su ID.
+     * 
+     * @param recipeId El identificador único de la receta
+     * @return LiveData con la receta encontrada o null
+     */
+    @Query("SELECT * FROM recipes WHERE id = :recipeId")
+    fun getRecipeById(recipeId: Int): LiveData
+
+    /**
+     * Obtiene todas las recetas marcadas como favoritas.
+     * 
+     * @return LiveData con la lista de recetas favoritas
+     */
+    @Query("SELECT * FROM recipes WHERE is_favorite = 1")
+    fun getFavorites(): LiveData<List>
+
+    /**
+     * Busca recetas que coincidan con el término de búsqueda.
+     * 
+     * La búsqueda es case-insensitive y busca coincidencias parciales
+     * en el nombre de la receta.
+     * 
+     * @param searchQuery Término de búsqueda (se añaden wildcards automáticamente)
+     * @return LiveData con las recetas que coinciden
+     */
+    @Query("SELECT * FROM recipes WHERE name LIKE '%' || :searchQuery || '%'")
+    fun searchRecipes(searchQuery: String): LiveData<List>
+
+    /**
+     * Filtra recetas por categoría específica.
+     * 
+     * @param category Nombre de la categoría (Mexicana, Italiana, etc.)
+     * @return LiveData con las recetas de esa categoría
+     */
+    @Query("SELECT * FROM recipes WHERE category = :category")
+    fun getRecipesByCategory(category: String): LiveData<List>
+}
+```
+
+---
+
+### 3. Repository - Capa de Abstracción
+```kotlin
+package com.recetas.app.data.repository
+
+import androidx.lifecycle.LiveData
+import com.recetas.app.data.local.dao.RecipeDao
+import com.recetas.app.data.model.Recipe
+
+/**
+ * Repositorio que maneja el acceso a datos de recetas.
+ * 
+ * Actúa como capa intermedia entre el ViewModel y la fuente de datos,
+ * permitiendo cambiar la implementación sin afectar la capa de presentación.
+ * Encapsula la lógica de acceso a datos y proporciona una API limpia.
+ *
+ * @property recipeDao DAO de Room para operaciones en la base de datos
+ * @constructor Crea un repositorio con el DAO especificado
+ * 
+ * @author Cristian y David
+ * @since 1.0
+ */
+class RecipeRepository(private val recipeDao: RecipeDao) {
+
+    /**
+     * LiveData con todas las recetas disponibles.
+     * Se actualiza automáticamente cuando hay cambios en la BD.
+     */
+    val allRecipes: LiveData<List> = recipeDao.getAllRecipes()
+    
+    /**
+     * LiveData con las recetas marcadas como favoritas.
+     * Se actualiza automáticamente cuando cambia el estado de favoritos.
+     */
+    val favorites: LiveData<List> = recipeDao.getFavorites()
+
+    /**
+     * Inserta una nueva receta en la base de datos de forma asíncrona.
+     * 
+     * Esta función suspendida debe ser llamada desde una coroutine o
+     * desde otra función suspendida. Room ejecuta la operación en un
+     * hilo de fondo automáticamente.
+     * 
+     * @param recipe La receta a insertar
+     */
+    suspend fun insert(recipe: Recipe) {
+        recipeDao.insert(recipe)
+    }
+
+    /**
+     * Actualiza los datos de una receta existente.
+     * 
+     * @param recipe La receta con los datos actualizados
+     */
+    suspend fun update(recipe: Recipe) {
+        recipeDao.update(recipe)
+    }
+
+    /**
+     * Elimina una receta de la base de datos.
+     * 
+     * @param recipe La receta a eliminar
+     */
+    suspend fun delete(recipe: Recipe) {
+        recipeDao.delete(recipe)
+    }
+
+    /**
+     * Realiza una búsqueda de recetas por nombre.
+     * 
+     * @param query Término de búsqueda
+     * @return LiveData con los resultados de la búsqueda
+     */
+    fun searchRecipes(query: String): LiveData<List> {
+        return recipeDao.searchRecipes(query)
+    }
+
+    /**
+     * Obtiene recetas filtradas por categoría.
+     * 
+     * @param category Nombre de la categoría a filtrar
+     * @return LiveData con las recetas de la categoría especificada
+     */
+    fun getRecipesByCategory(category: String): LiveData<List> {
+        return recipeDao.getRecipesByCategory(category)
+    }
+
+    /**
+     * Obtiene una receta específica por su ID.
+     * 
+     * @param id Identificador único de la receta
+     * @return LiveData con la receta solicitada
+     */
+    fun getRecipeById(id: Int): LiveData {
+        return recipeDao.getRecipeById(id)
+    }
+}
+```
+
+---
+
+### 4. ViewModel - Lógica de Presentación
+```kotlin
+package com.recetas.app.ui.home
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.viewModelScope
+import com.recetas.app.data.local.database.AppDatabase
+import com.recetas.app.data.model.Recipe
+import com.recetas.app.data.repository.RecipeRepository
+import kotlinx.coroutines.launch
+
+/**
+ * ViewModel principal para la gestión de recetas en la UI.
+ * 
+ * Mantiene los datos de la UI y sobrevive a cambios de configuración
+ * (como rotaciones de pantalla). Proporciona métodos para realizar
+ * operaciones CRUD y expone LiveData para observación reactiva.
+ * 
+ * Extiende AndroidViewModel para tener acceso al Application context,
+ * necesario para inicializar la base de datos Room.
+ *
+ * @param application Contexto de la aplicación
+ * 
+ * @author Cristian y David
+ * @since 1.0
+ */
+class RecipeViewModel(application: Application) : AndroidViewModel(application) {
+
+    /**
+     * Repositorio que maneja el acceso a datos.
+     * Privado para encapsular la implementación.
+     */
+    private val repository: RecipeRepository
+    
+    /**
+     * LiveData con todas las recetas disponibles.
+     * La UI puede observar este LiveData para recibir actualizaciones automáticas.
+     */
+    val allRecipes: LiveData<List>
+    
+    /**
+     * LiveData con las recetas marcadas como favoritas.
+     * Se actualiza automáticamente cuando cambia el estado de favoritos.
+     */
+    val favorites: LiveData<List>
+
+    /**
+     * Bloque de inicialización que se ejecuta al crear el ViewModel.
+     * 
+     * Inicializa la base de datos Room, crea el repositorio y
+     * obtiene las referencias a LiveData para exponer a la UI.
+     */
+    init {
+        // Obtener la instancia singleton de la base de datos
+        val recipeDao = AppDatabase.getDatabase(application).recipeDao()
+        
+        // Crear el repositorio con el DAO
+        repository = RecipeRepository(recipeDao)
+        
+        // Obtener LiveData del repositorio
+        allRecipes = repository.allRecipes
+        favorites = repository.favorites
+    }
+
+    /**
+     * Inserta una nueva receta en la base de datos.
+     * 
+     * Lanza una coroutine en el viewModelScope para ejecutar la operación
+     * de forma asíncrona. El scope se cancela automáticamente cuando
+     * el ViewModel es destruido.
+     * 
+     * @param recipe La receta a insertar
+     */
+    fun insert(recipe: Recipe) = viewModelScope.launch {
+        repository.insert(recipe)
+    }
+
+    /**
+     * Actualiza una receta existente.
+     * 
+     * Útil para modificar datos o cambiar el estado de favorito.
+     * 
+     * @param recipe La receta con los datos actualizados
+     */
+    fun update(recipe: Recipe) = viewModelScope.launch {
+        repository.update(recipe)
+    }
+
+    /**
+     * Elimina una receta de la base de datos.
+     * 
+     * @param recipe La receta a eliminar
+     */
+    fun delete(recipe: Recipe) = viewModelScope.launch {
+        repository.delete(recipe)
+    }
+
+    /**
+     * Busca recetas que coincidan con el término de búsqueda.
+     * 
+     * @param query Término de búsqueda (nombre o ingrediente)
+     * @return LiveData con los resultados filtrados
+     */
+    fun searchRecipes(query: String): LiveData<List> {
+        return repository.searchRecipes(query)
+    }
+
+    /**
+     * Obtiene recetas de una categoría específica.
+     * 
+     * @param category Nombre de la categoría (Mexicana, Italiana, etc.)
+     * @return LiveData con las recetas filtradas por categoría
+     */
+    fun getRecipesByCategory(category: String): LiveData<List> {
+        return repository.getRecipesByCategory(category)
+    }
+
+    /**
+     * Obtiene una receta específica por su ID.
+     * 
+     * @param id Identificador único de la receta
+     * @return LiveData con la receta solicitada
+     */
+    fun getRecipeById(id: Int): LiveData {
+        return repository.getRecipeById(id)
+    }
+}
+```
+
+---
+
+### 5. MainActivity - Activity Principal
+```kotlin
+package com.recetas.app.ui.home
+
+import android.content.Intent
+import android.os.Bundle
+import android.view.LayoutInflater
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.ViewModelProvider
+import androidx.recyclerview.widget.GridLayoutManager
+import com.google.android.material.chip.Chip
+import com.recetas.app.R
+import com.recetas.app.adapters.RecipeAdapter
+import com.recetas.app.data.model.Recipe
+import com.recetas.app.databinding.ActivityMainBinding
+import com.recetas.app.ui.add.AddRecipeActivity
+import com.recetas.app.ui.detail.DetailActivity
+import com.recetas.app.ui.favorites.FavoritesActivity
+import com.recetas.app.ui.profile.ProfileActivity
+import com.recetas.app.ui.search.SearchActivity
+
+/**
+ * Activity principal de la aplicación RecetApp.
+ * 
+ * Muestra el listado de recetas en un RecyclerView con diseño de grid,
+ * permite filtrar por categorías y navegar a otras pantallas mediante
+ * el Bottom Navigation. Es el punto de entrada después del login.
+ * 
+ * Utiliza ViewBinding para acceso seguro a las vistas y ViewModel
+ * para manejar los datos con arquitectura MVVM.
+ *
+ * @author Cristian y David
+ * @since 1.0
+ */
+class MainActivity : AppCompatActivity() {
+
+    /**
+     * ViewBinding generado automáticamente para acceso seguro a vistas.
+     * Evita el uso de findViewById y proporciona referencias tipadas.
+     */
+    private lateinit var binding: ActivityMainBinding
+    
+    /**
+     * ViewModel que maneja la lógica de datos de recetas.
+     * Sobrevive a cambios de configuración como rotaciones.
+     */
+    private lateinit var recipeViewModel: RecipeViewModel
+    
+    /**
+     * Adapter para el RecyclerView que muestra las recetas.
+     * Maneja la conversión de datos a vistas.
+     */
+    private lateinit var adapter: RecipeAdapter
+
+    /**
+     * Lista de categorías disponibles para filtrar recetas.
+     * "Todas" muestra todas las recetas sin filtrar.
+     */
+    private val categories = listOf(
+        "Todas", "Mexicana", "Italiana", "Japonesa", 
+        "Americana", "Ensaladas", "Postres"
+    )
+
+    /**
+     * Método del ciclo de vida llamado cuando se crea la Activity.
+     * 
+     * Inicializa el ViewBinding, configura el ViewModel, prepara el
+     * RecyclerView y establece los observadores para datos reactivos.
+     * 
+     * @param savedInstanceState Estado guardado de la instancia anterior
+     */
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        // Inflar el layout usando ViewBinding
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        // Inicializar ViewModel con ViewModelProvider
+        recipeViewModel = ViewModelProvider(this)[RecipeViewModel::class.java]
+
+        // Configurar RecyclerView con adapter y layout manager
+        setupRecyclerView()
+
+        // Configurar chips de categorías para filtrado
+        setupCategories()
+
+        // Observar cambios en la lista de recetas
+        observeRecipes()
+
+        // Configurar listeners de navegación
+        setupClickListeners()
+
+        // Configurar Bottom Navigation
+        setupBottomNavigation()
+
+        // Insertar recetas de ejemplo si la BD está vacía
+        insertSampleRecipes()
+    }
+
+    /**
+     * Configura el RecyclerView con GridLayoutManager y el adapter.
+     * 
+     * El RecyclerView muestra las recetas en una cuadrícula de 2 columnas.
+     * El adapter maneja el click en cada receta para navegar al detalle.
+     */
+    private fun setupRecyclerView() {
+        adapter = RecipeAdapter { recipe ->
+            // Lambda que se ejecuta al hacer click en una receta
+            navigateToDetail(recipe)
+        }
+
+        // Configurar RecyclerView con grid de 2 columnas
+        binding.recipesRecyclerView.layoutManager = GridLayoutManager(this, 2)
+        binding.recipesRecyclerView.adapter = adapter
+    }
+
+    /**
+     * Observa los cambios en el LiveData de recetas del ViewModel.
+     * 
+     * Cuando hay cambios en la base de datos, este observer recibe
+     * la lista actualizada y la pasa al adapter para mostrarla.
+     */
+    private fun observeRecipes() {
+        recipeViewModel.allRecipes.observe(this) { recipes ->
+            // Actualizar el adapter con la nueva lista
+            adapter.setRecipes(recipes)
+        }
+    }
+
+    /**
+     * Navega a la pantalla de detalle de una receta específica.
+     * 
+     * @param recipe La receta seleccionada por el usuario
+     */
+    private fun navigateToDetail(recipe: Recipe) {
+        val intent = Intent(this, DetailActivity::class.java).apply {
+            putExtra("RECIPE_ID", recipe.id)
+        }
+        startActivity(intent)
+    }
+
+    /**
+     * Configura los chips de categorías en un scroll horizontal.
+     * 
+     * Crea dinámicamente un chip por cada categoría y configura
+     * el listener para filtrar recetas al seleccionar una categoría.
+     */
+    private fun setupCategories() {
+        categories.forEach { category ->
+            // Inflar el layout del chip desde XML
+            val chip = LayoutInflater.from(this)
+                .inflate(R.layout.item_category_chip, binding.categoriesChipGroup, false) as Chip
+
+            chip.text = category
+            chip.isChecked = category == "Todas"
+
+            // Configurar listener para filtrado
+            chip.setOnClickListener {
+                filterByCategory(category)
+            }
+
+            // Agregar el chip al ChipGroup
+            binding.categoriesChipGroup.addView(chip)
+        }
+    }
+
+    /**
+     * Filtra las recetas por categoría seleccionada.
+     * 
+     * Si la categoría es "Todas", muestra todas las recetas.
+     * De lo contrario, navega a CategoriesActivity con el filtro.
+     * 
+     * @param category Nombre de la categoría seleccionada
+     */
+    private fun filterByCategory(category: String) {
+        if (category == "Todas") {
+            // Mostrar todas las recetas
+            recipeViewModel.allRecipes.observe(this) { recipes ->
+                adapter.setRecipes(recipes)
+            }
+        } else {
+            // Navegar a vista filtrada por categoría
+            val intent = Intent(this, CategoriesActivity::class.java).apply {
+                putExtra("CATEGORY", category)
+            }
+            startActivity(intent)
+        }
+    }
+
+    /**
+     * Configura los listeners para elementos de la UI.
+     * 
+     * Incluye el campo de búsqueda y el botón de perfil en el header.
+     */
+    private fun setupClickListeners() {
+        // Click en barra de búsqueda
+        binding.searchEditText.setOnClickListener {
+            startActivity(Intent(this, SearchActivity::class.java))
+        }
+
+        // Click en botón de perfil
+        binding.profileButton.setOnClickListener {
+            startActivity(Intent(this, ProfileActivity::class.java))
+        }
+    }
+
+    /**
+     * Configura el Bottom Navigation para navegar entre secciones.
+     * 
+     * Establece el item actual como seleccionado y configura los
+     * listeners para cambiar de Activity al seleccionar otro item.
+     */
+    private fun setupBottomNavigation() {
+        binding.bottomNavigation.selectedItemId = R.id.nav_home
+
+        binding.bottomNavigation.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.nav_home -> true // Ya estamos aquí
+                R.id.nav_search -> {
+                    startActivity(Intent(this, SearchActivity::class.java))
+                    finish()
+                    true
+                }
+                R.id.nav_add -> {
+                    startActivity(Intent(this, AddRecipeActivity::class.java))
+                    finish()
+                    true
+                }
+                R.id.nav_favorites -> {
+                    startActivity(Intent(this, FavoritesActivity::class.java))
+                    finish()
+                    true
+                }
+                R.id.nav_profile -> {
+                    startActivity(Intent(this, ProfileActivity::class.java))
+                    finish()
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    /**
+     * Inserta recetas de ejemplo si la base de datos está vacía.
+     * 
+     * Se ejecuta solo en la primera ejecución para proporcionar
+     * contenido inicial al usuario. Incluye 6 recetas de diferentes
+     * categorías para demostrar la funcionalidad de la app.
+     */
+    private fun insertSampleRecipes() {
+        recipeViewModel.allRecipes.observe(this) { recipes ->
+            if (recipes.isEmpty()) {
+                // Lista de recetas de ejemplo
+                val sampleRecipes = listOf(
+                    Recipe(
+                        name = "Tacos al Pastor",
+                        category = "Mexicana",
+                        time = "30 min",
+                        servings = 4,
+                        difficulty = "Fácil",
+                        ingredients = "Carne de cerdo,Piña,Tortillas,Cilantro,Cebolla,Limón",
+                        instructions = "1. Marinar la carne con especias\n2. Asar la carne hasta dorar\n3. Calentar las tortillas\n4. Servir con piña, cilantro y cebolla",
+                        imageUrl = "🌮"
+                    ),
+                    // ... más recetas
+                )
+
+                // Insertar cada receta en la base de datos
+                sampleRecipes.forEach { recipe ->
+                    recipeViewModel.insert(recipe)
+                }
+            }
+        }
+    }
+}
+```
+
+---
+
+### 6. RecipeAdapter - Adapter del RecyclerView
+```kotlin
+package com.recetas.app.adapters
+
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.TextView
+import androidx.recyclerview.widget.RecyclerView
+import com.recetas.app.R
+import com.recetas.app.data.model.Recipe
+
+/**
+ * Adapter para mostrar recetas en un RecyclerView.
+ * 
+ * Convierte los datos de Recipe en vistas visuales y maneja
+ * la interacción del usuario con cada item de la lista.
+ * Implementa el patrón ViewHolder para optimizar el rendimiento.
+ *
+ * @property onItemClick Lambda que se ejecuta al hacer click en una receta
+ * 
+ * @author Cristian y David
+ * @since 1.0
+ */
+class RecipeAdapter(
+    private val onItemClick: (Recipe) -> Unit
+) : RecyclerView.Adapter() {
+
+    /**
+     * Lista de recetas a mostrar.
+     * Inicialmente vacía, se actualiza con setRecipes().
+     */
+    private var recipes = emptyList()
+
+    /**
+     * ViewHolder que mantiene las referencias a las vistas de cada item.
+     * 
+     * Evita llamadas repetidas a findViewById mejorando el rendimiento.
+     * Se crea una vez y se reutiliza cuando el item sale y vuelve a pantalla.
+     * 
+     * @param itemView Vista raíz del item inflado
+     */
+    class RecipeViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        val nameTextView: TextView = itemView.findViewById(R.id.recipeNameTextView)
+        val timeTextView: TextView = itemView.findViewById(R.id.recipeTimeTextView)
+        val servingsTextView: TextView = itemView.findViewById(R.id.recipeServingsTextView)
+        val emojiTextView: TextView = itemView.findViewById(R.id.recipeEmoji)
+    }
+
+    /**
+     * Crea un nuevo ViewHolder inflando el layout del item.
+     * 
+     * Se llama cuando RecyclerView necesita un nuevo ViewHolder
+     * porque no hay ninguno reciclable disponible.
+     * 
+     * @param parent ViewGroup padre donde se añadirá la vista
+     * @param viewType Tipo de vista (no usado aquí, todos son iguales)
+     * @return Nuevo ViewHolder con la vista inflada
+     */
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecipeViewHolder {
+        val itemView = LayoutInflater.from(parent.context)
+            .inflate(R.layout.item_recipe, parent, false)
+        return RecipeViewHolder(itemView)
+    }
+
+    /**
+     * Vincula los datos de una receta con las vistas del ViewHolder.
+     * 
+     * Se llama cuando RecyclerView necesita mostrar un item en pantalla.
+     * Actualiza las vistas con los datos de la receta en la posición indicada.
+     * 
+     * @param holder ViewHolder cuyas vistas deben ser actualizadas
+     * @param position Posición del item en la lista
+     */
+    override fun onBindViewHolder(holder: RecipeViewHolder, position: Int) {
+        // Obtener la receta en esta posición
+        val currentRecipe = recipes[position]
+
+        // Actualizar las vistas con los datos
+        holder.nameTextView.text = currentRecipe.name
+        holder.timeTextView.text = currentRecipe.time
+        holder.servingsTextView.text = currentRecipe.servings.toString()
+        holder.emojiTextView.text = currentRecipe.imageUrl ?: "🍽️"
+
+        // Configurar click listener para toda la vista
+        holder.itemView.setOnClickListener {
+            onItemClick(currentRecipe)
+        }
+    }
+
+    /**
+     * Retorna el número total de items en la lista.
+     * 
+     * @return Cantidad de recetas a mostrar
+     */
+    override fun getItemCount() = recipes.size
+
+    /**
+     * Actualiza la lista de recetas y notifica al RecyclerView.
+     * 
+     * Debe ser llamado desde la Activity/Fragment cuando cambian los datos.
+     * notifyDataSetChanged() indica al RecyclerView que redibuje todos los items.
+     * 
+     * @param recipes Nueva lista de recetas a mostrar
+     */
+    fun setRecipes(recipes: List) {
+        this.recipes = recipes
+        notifyDataSetChanged()
+    }
+}
+```
+
+---
+---
+
+### 7. AppDatabase - Configuración de Room Database
+```kotlin
+package com.recetas.app.data.local.database
+
+import android.content.Context
+import androidx.room.Database
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
+import com.recetas.app.data.local.dao.*
+import com.recetas.app.data.model.*
+
+/**
+ * Clase abstracta que define la configuración de la base de datos Room.
+ * 
+ * Room genera automáticamente la implementación de esta clase.
+ * Actúa como punto de acceso principal para la base de datos subyacente.
+ * Implementa el patrón Singleton para garantizar una única instancia.
+ * 
+ * La base de datos contiene 8 entidades relacionadas para gestionar
+ * recetas, calificaciones, colecciones, tags, notificaciones y multimedia.
+ * 
+ * @property entities Lista de clases Entity que definen las tablas
+ * @property version Número de versión del esquema de BD (incrementar en cambios)
+ * @property exportSchema Si se debe exportar el esquema a archivo JSON
+ * 
+ * @author Cristian y David
+ * @since 1.0
+ */
+@Database(
+    entities = [
+        Recipe::class,              // Tabla de recetas
+        Rating::class,              // Tabla de calificaciones
+        RecipeCollection::class,    // Tabla de colecciones
+        RecipeCollectionItem::class,// Items de colecciones (relación M-N)
+        Tag::class,                 // Tabla de etiquetas
+        RecipeTag::class,           // Relación recetas-tags (M-N)
+        Notification::class,        // Tabla de notificaciones
+        RecipeMedia::class          // Tabla de multimedia (fotos/videos)
+    ],
+    version = 7,                    // Versión actual del esquema
+    exportSchema = false            // No exportar esquema a JSON
+)
+@TypeConverters(Converters::class)  // Convertidores de tipos personalizados
+abstract class AppDatabase : RoomDatabase() {
+    
+    /**
+     * Proporciona acceso al DAO de recetas.
+     * @return Instancia del RecipeDao
+     */
+    abstract fun recipeDao(): RecipeDao
+    
+    /**
+     * Proporciona acceso al DAO de calificaciones.
+     * @return Instancia del RatingDao
+     */
+    abstract fun ratingDao(): RatingDao
+    
+    /**
+     * Proporciona acceso al DAO de colecciones.
+     * @return Instancia del CollectionDao
+     */
+    abstract fun collectionDao(): CollectionDao
+    
+    /**
+     * Proporciona acceso al DAO de notificaciones.
+     * @return Instancia del NotificationDao
+     */
+    abstract fun notificationDao(): NotificationDao
+    
+    /**
+     * Proporciona acceso al DAO de tags.
+     * @return Instancia del TagDao
+     */
+    abstract fun tagDao(): TagDao
+    
+    /**
+     * Proporciona acceso al DAO de multimedia.
+     * @return Instancia del RecipeMediaDao
+     */
+    abstract fun recipeMediaDao(): RecipeMediaDao
+
+    /**
+     * Objeto companion que implementa el patrón Singleton.
+     * 
+     * Garantiza que solo exista una instancia de la base de datos
+     * en toda la aplicación, evitando problemas de concurrencia.
+     */
+    companion object {
+        /**
+         * Instancia única de la base de datos.
+         * @Volatile asegura que los cambios sean visibles inmediatamente
+         * en todos los hilos de ejecución.
+         */
+        @Volatile
+        private var INSTANCE: AppDatabase? = null
+
+        /**
+         * Obtiene la instancia única de la base de datos.
+         * 
+         * Implementa double-checked locking para thread-safety.
+         * Si la instancia no existe, la crea de forma sincronizada
+         * para evitar que múltiples hilos creen instancias duplicadas.
+         * 
+         * @param context Contexto de la aplicación
+         * @return Instancia única de AppDatabase
+         */
+        fun getDatabase(context: Context): AppDatabase {
+            // Si la instancia ya existe, retornarla directamente
+            return INSTANCE ?: synchronized(this) {
+                // Double-check dentro del bloque sincronizado
+                val instance = Room.databaseBuilder(
+                    context.applicationContext,
+                    AppDatabase::class.java,
+                    "recipe_database"  // Nombre del archivo de la BD
+                )
+                .fallbackToDestructiveMigration()  // Recrear BD en cambios de esquema
+                .build()
+                
+                // Guardar la instancia y retornarla
+                INSTANCE = instance
+                instance
+            }
+        }
+    }
+}
+```
+
+---
+
+### 8. DetailActivity - Pantalla de Detalle de Receta
+```kotlin
+package com.recetas.app.ui.detail
+
+import android.content.Intent
+import android.os.Bundle
+import android.view.View
+import android.widget.Toast
+import android.widget.RatingBar
+import android.widget.EditText
+import android.widget.LinearLayout
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.ViewModelProvider
+import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.tabs.TabLayoutMediator
+import com.recetas.app.adapters.RatingAdapter
+import com.recetas.app.adapters.RecipeDetailPagerAdapter
+import com.recetas.app.data.model.Recipe
+import com.recetas.app.data.model.Rating
+import com.recetas.app.databinding.ActivityDetailBinding
+import com.recetas.app.ui.add.EditRecipeActivity
+import com.recetas.app.ui.home.RecipeViewModel
+import com.recetas.app.ui.shopping.ShoppingListActivity
+
+/**
+ * Activity que muestra el detalle completo de una receta.
+ * 
+ * Presenta toda la información de la receta incluyendo:
+ * - Header con emoji, nombre y categoría
+ * - Cards de información (tiempo, porciones, dificultad)
+ * - Tabs con ingredientes y pasos de preparación
+ * - Sistema de calificaciones con promedio y comentarios
+ * - Botones de acción (favorito, editar, lista de compras, etc.)
+ * 
+ * Implementa arquitectura MVVM con observación de LiveData.
+ *
+ * @author Cristian y David
+ * @since 1.0
+ */
+class DetailActivity : AppCompatActivity() {
+
+    /**
+     * ViewBinding para acceso seguro a las vistas del layout.
+     */
+    private lateinit var binding: ActivityDetailBinding
+    
+    /**
+     * ViewModel para gestionar datos de recetas.
+     */
+    private lateinit var recipeViewModel: RecipeViewModel
+    
+    /**
+     * ViewModel para gestionar calificaciones y reseñas.
+     */
+    private lateinit var ratingViewModel: RatingViewModel
+    
+    /**
+     * Adapter para mostrar la lista de reseñas.
+     */
+    private lateinit var ratingAdapter: RatingAdapter
+    
+    /**
+     * ID de la receta actual obtenido del Intent.
+     */
+    private var recipeId: Int = 0
+    
+    /**
+     * Referencia a la receta actual cargada.
+     */
+    private var currentRecipe: Recipe? = null
+
+    /**
+     * Inicializa la Activity y carga los datos de la receta.
+     * 
+     * @param savedInstanceState Estado guardado de la instancia anterior
+     */
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivityDetailBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        // Obtener ID de la receta del Intent
+        recipeId = intent.getIntExtra("RECIPE_ID", 0)
+
+        // Inicializar ViewModels
+        recipeViewModel = ViewModelProvider(this)[RecipeViewModel::class.java]
+        ratingViewModel = ViewModelProvider(this)[RatingViewModel::class.java]
+
+        // Configurar toolbar con botón de retroceso
+        setSupportActionBar(binding.toolbar)
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        supportActionBar?.title = ""
+
+        // Configurar navegación hacia atrás
+        binding.toolbar.setNavigationOnClickListener { finish() }
+
+        // Configurar RecyclerView de reseñas
+        setupRatingsRecyclerView()
+
+        // Cargar datos de la receta y sus reseñas
+        loadRecipeData()
+        loadRatings()
+
+        // Configurar listeners de botones
+        setupClickListeners()
+    }
+
+    /**
+     * Configura el RecyclerView para mostrar las reseñas.
+     * 
+     * Usa LinearLayoutManager para lista vertical de reseñas.
+     */
+    private fun setupRatingsRecyclerView() {
+        ratingAdapter = RatingAdapter()
+        binding.ratingsRecyclerView.layoutManager = LinearLayoutManager(this)
+        binding.ratingsRecyclerView.adapter = ratingAdapter
+    }
+
+    /**
+     * Carga y muestra los datos de la receta desde la base de datos.
+     * 
+     * Observa los cambios en el LiveData y actualiza la UI
+     * automáticamente cuando la receta cambia.
+     */
+    private fun loadRecipeData() {
+        recipeViewModel.getRecipeById(recipeId).observe(this) { recipe ->
+            if (recipe != null) {
+                currentRecipe = recipe
+
+                // Actualizar vistas del header
+                binding.recipeEmojiDetail.text = recipe.imageUrl ?: "🍽️"
+                binding.recipeNameDetail.text = recipe.name
+                binding.recipeCategoryDetail.text = recipe.category
+                
+                // Actualizar cards de información
+                binding.recipeTimeDetail.text = recipe.time
+                binding.recipeServingsDetail.text = recipe.servings.toString()
+                binding.recipeDifficultyDetail.text = recipe.difficulty
+
+                // Actualizar estado del botón de favorito
+                updateFavoriteIcon(recipe.isFavorite)
+
+                // Configurar ViewPager con tabs de ingredientes/preparación
+                setupViewPager(recipe.ingredients, recipe.instructions)
+            }
+        }
+    }
+
+    /**
+     * Carga las reseñas de la receta y calcula el promedio.
+     * 
+     * Observa los cambios en las calificaciones y actualiza
+     * tanto la lista de reseñas como el promedio de estrellas.
+     */
+    private fun loadRatings() {
+        ratingViewModel.getRatingsByRecipe(recipeId).observe(this) { ratings ->
+            if (ratings.isNotEmpty()) {
+                // Actualizar adapter con las reseñas
+                ratingAdapter.setRatings(ratings)
+
+                // Mostrar número de reseñas
+                binding.ratingsCountText.text =
+                    "${ratings.size} reseña${if (ratings.size > 1) "s" else ""}"
+
+                // Calcular y mostrar promedio
+                val average = ratings.map { it.stars }.average().toFloat()
+                binding.averageRatingText.text = String.format("%.1f", average)
+                binding.averageRatingBar.rating = average
+            } else {
+                // Sin reseñas aún
+                binding.ratingsCountText.text = "Sin reseñas aún"
+                binding.averageRatingText.text = "0.0"
+                binding.averageRatingBar.rating = 0f
+            }
+        }
+    }
+
+    /**
+     * Configura todos los listeners de click de los botones.
+     * 
+     * Incluye: favorito, editar, lista de compras, calificar,
+     * gestionar tags, recordatorios y galería de fotos.
+     */
+    private fun setupClickListeners() {
+        // Botón de favorito
+        binding.favoriteButton.setOnClickListener { 
+            toggleFavorite() 
+        }
+
+        // Botón de editar
+        binding.editButton.setOnClickListener {
+            val intent = Intent(this, EditRecipeActivity::class.java)
+            intent.putExtra("RECIPE_ID", recipeId)
+            startActivity(intent)
+        }
+
+        // Botón de lista de compras
+        binding.shoppingListButton.setOnClickListener {
+            val intent = Intent(this, ShoppingListActivity::class.java)
+            intent.putExtra("RECIPE_ID", recipeId)
+            startActivity(intent)
+        }
+
+        // Botón de calificar
+        binding.rateButton.setOnClickListener {
+            showRatingDialog()
+        }
+
+        // Botón de gestionar tags
+        binding.manageTagsButton.setOnClickListener {
+            showManageTagsDialog()
+        }
+
+        // Botón de recordatorio
+        binding.reminderButton.setOnClickListener {
+            showCreateReminderDialog()
+        }
+
+        // Botón de galería
+        binding.galleryButton.setOnClickListener {
+            // Navegar a galería de fotos
+            // (implementación omitida para brevedad)
+        }
+    }
+
+    /**
+     * Alterna el estado de favorito de la receta.
+     * 
+     * Cambia el valor de isFavorite y actualiza la base de datos.
+     * Muestra un Toast confirmando la acción.
+     */
+    private fun toggleFavorite() {
+        currentRecipe?.let { recipe ->
+            // Crear copia con estado de favorito invertido
+            val updatedRecipe = recipe.copy(isFavorite = !recipe.isFavorite)
+            
+            // Actualizar en base de datos
+            recipeViewModel.update(updatedRecipe)
+            
+            // Actualizar referencia local
+            currentRecipe = updatedRecipe
+
+            // Actualizar UI
+            updateFavoriteIcon(updatedRecipe.isFavorite)
+
+            // Mostrar mensaje de confirmación
+            val message = if (updatedRecipe.isFavorite) {
+                "Agregado a favoritos ❤️"
+            } else {
+                "Eliminado de favoritos"
+            }
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
+     * Actualiza el icono del botón de favorito según el estado.
+     * 
+     * @param isFavorite True si la receta es favorita, false si no
+     */
+    private fun updateFavoriteIcon(isFavorite: Boolean) {
+        // Aquí puedes cambiar el icono o color del botón
+        // (implementación específica de UI)
+    }
+
+    /**
+     * Configura el ViewPager2 con tabs de ingredientes y preparación.
+     * 
+     * Crea un adapter personalizado que muestra dos páginas:
+     * una con la lista de ingredientes y otra con los pasos.
+     * 
+     * @param ingredients String con ingredientes separados por comas
+     * @param instructions String con pasos de preparación
+     */
+    private fun setupViewPager(ingredients: String, instructions: String) {
+        binding.viewPager.visibility = View.VISIBLE
+        binding.tabLayout.visibility = View.VISIBLE
+
+        // Convertir string de ingredientes a lista
+        val ingredientsList = ingredients.split(",").map { it.trim() }
+
+        // Crear adapter del ViewPager
+        val adapter = RecipeDetailPagerAdapter(ingredientsList, instructions)
+        binding.viewPager.adapter = adapter
+
+        // Vincular TabLayout con ViewPager
+        TabLayoutMediator(binding.tabLayout, binding.viewPager) { tab, position ->
+            tab.text = when (position) {
+                0 -> "Ingredientes"
+                1 -> "Preparación"
+                else -> ""
+            }
+        }.attach()
+    }
+
+    /**
+     * Muestra un diálogo para que el usuario califique la receta.
+     * 
+     * El diálogo incluye:
+     * - RatingBar para seleccionar estrellas (1-5)
+     * - EditText para comentario opcional
+     * - Botones de Enviar y Cancelar
+     */
+    private fun showRatingDialog() {
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("Califica esta receta")
+
+        // Crear layout del diálogo
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(50, 40, 50, 10)
+        }
+
+        // RatingBar para estrellas
+        val ratingBar = RatingBar(this).apply {
+            numStars = 5
+            stepSize = 1f
+        }
+
+        // EditText para comentario
+        val commentInput = EditText(this).apply {
+            hint = "Escribe tu comentario (opcional)"
+            minLines = 3
+        }
+
+        layout.addView(ratingBar)
+        layout.addView(commentInput)
+        builder.setView(layout)
+
+        // Botón de enviar
+        builder.setPositiveButton("Enviar") { _, _ ->
+            // Obtener nombre del usuario de SharedPreferences
+            val prefs = getSharedPreferences("RecetAppPrefs", MODE_PRIVATE)
+            val userName = prefs.getString("name", "Usuario") ?: "Usuario"
+
+            // Crear objeto Rating
+            val rating = Rating(
+                recipeId = recipeId,
+                userName = userName,
+                stars = ratingBar.rating.toInt(),
+                comment = commentInput.text.toString()
+            )
+
+            // Guardar en base de datos
+            ratingViewModel.addRating(rating)
+            
+            Toast.makeText(this, "¡Valoración enviada!", Toast.LENGTH_SHORT).show()
+        }
+
+        builder.setNegativeButton("Cancelar", null)
+        builder.show()
+    }
+
+    /**
+     * Muestra diálogo para gestionar tags de la receta.
+     * 
+     * Permite seleccionar/deseleccionar tags existentes para
+     * asociarlos con la receta actual.
+     * (Implementación simplificada)
+     */
+    private fun showManageTagsDialog() {
+        // Implementación del diálogo de tags
+        Toast.makeText(this, "Gestionar Tags", Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * Muestra diálogo para crear un recordatorio de la receta.
+     * 
+     * Permite configurar fecha, hora y mensaje personalizado
+     * para recibir una notificación futura.
+     * (Implementación simplificada)
+     */
+    private fun showCreateReminderDialog() {
+        // Implementación del diálogo de recordatorio
+        Toast.makeText(this, "Crear Recordatorio", Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * Se llama cuando la Activity vuelve a primer plano.
+     * 
+     * Recarga los datos por si fueron modificados en otra pantalla.
+     */
+    override fun onResume() {
+        super.onResume()
+        loadRecipeData()
+    }
+}
+```
+
+---
+
+### 9. AddRecipeActivity - Agregar Nueva Receta
+```kotlin
+package com.recetas.app.ui.add
+
+import android.content.Intent
+import android.os.Bundle
+import android.widget.ArrayAdapter
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.ViewModelProvider
+import com.recetas.app.data.model.Recipe
+import com.recetas.app.databinding.ActivityAddRecipeBinding
+import com.recetas.app.ui.home.MainActivity
+import com.recetas.app.ui.home.RecipeViewModel
+
+/**
+ * Activity para agregar una nueva receta a la base de datos.
+ * 
+ * Proporciona un formulario completo con validación para que
+ * el usuario ingrese todos los datos de una receta nueva:
+ * - Nombre y emoji representativo
+ * - Tiempo de preparación y porciones
+ * - Categoría y dificultad (dropdowns)
+ * - Ingredientes (separados por comas)
+ * - Pasos de preparación
+ * 
+ * Implementa validaciones para garantizar que todos los campos
+ * requeridos estén completos antes de guardar.
+ *
+ * @author Cristian y David
+ * @since 1.0
+ */
+class AddRecipeActivity : AppCompatActivity() {
+
+    /**
+     * ViewBinding para acceso seguro a las vistas.
+     */
+    private lateinit var binding: ActivityAddRecipeBinding
+    
+    /**
+     * ViewModel para insertar la receta en la BD.
+     */
+    private lateinit var recipeViewModel: RecipeViewModel
+    
+    /**
+     * Emoji seleccionado para representar la receta.
+     * Por defecto es el emoji de plato genérico.
+     */
+    private var selectedEmoji = "🍽️"
+
+    /**
+     * Lista de categorías disponibles para el dropdown.
+     */
+    private val categories = listOf(
+        "Mexicana", "Italiana", "Japonesa", "Americana", 
+        "Ensaladas", "Postres", "Sopas", "Bebidas"
+    )
+    
+    /**
+     * Lista de niveles de dificultad para el dropdown.
+     */
+    private val difficulties = listOf("Fácil", "Media", "Difícil")
+    
+    /**
+     * Lista de emojis disponibles para seleccionar.
+     */
+    private val emojis = listOf(
+        "🌮", "🍕", "🍝", "🍣", "🍔", "🥗", "🍲", "🥘", 
+        "🍛", "🍜", "🥙", "🌯", "🥪", "🍱", "🍳", "🥞", 
+        "🧇", "🥓", "🍗", "🍖"
+    )
+
+    /**
+     * Inicializa la Activity y configura todos los componentes.
+     * 
+     * @param savedInstanceState Estado guardado de la instancia anterior
+     */
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivityAddRecipeBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        // Inicializar ViewModel
+        recipeViewModel = ViewModelProvider(this)[RecipeViewModel::class.java]
+
+        // Configurar dropdowns de categoría y dificultad
+        setupCategoryDropdown()
+        setupDifficultyDropdown()
+
+        // Configurar listeners
+        setupClickListeners()
+
+        // Configurar Bottom Navigation
+        setupBottomNavigation()
+    }
+
+    /**
+     * Configura el AutoCompleteTextView de categorías.
+     * 
+     * Crea un ArrayAdapter con las categorías disponibles
+     * y lo asigna al campo de categoría.
+     */
+    private fun setupCategoryDropdown() {
+        val adapter = ArrayAdapter(
+            this, 
+            android.R.layout.simple_dropdown_item_1line, 
+            categories
+        )
+        binding.recipeCategoryInput.setAdapter(adapter)
+    }
+
+    /**
+     * Configura el AutoCompleteTextView de dificultad.
+     * 
+     * Crea un ArrayAdapter con los niveles de dificultad
+     * y lo asigna al campo de dificultad.
+     */
+    private fun setupDifficultyDropdown() {
+        val adapter = ArrayAdapter(
+            this, 
+            android.R.layout.simple_dropdown_item_1line, 
+            difficulties
+        )
+        binding.recipeDifficultyInput.setAdapter(adapter)
+    }
+
+    /**
+     * Configura los listeners de click de todos los botones.
+     */
+    private fun setupClickListeners() {
+        // Click en el área de imagen para elegir emoji
+        binding.imageCard.setOnClickListener {
+            showEmojiPicker()
+        }
+
+        // Botón volver
+        binding.backButton.setOnClickListener {
+            finish()
+        }
+
+        // Botón guardar receta
+        binding.saveRecipeButton.setOnClickListener {
+            saveRecipe()
+        }
+    }
+
+    /**
+     * Muestra un diálogo para seleccionar un emoji.
+     * 
+     * Presenta la lista de emojis disponibles en un AlertDialog
+     * y actualiza la vista preview cuando el usuario selecciona uno.
+     */
+    private fun showEmojiPicker() {
+        AlertDialog.Builder(this)
+            .setTitle("Elige un emoji para tu receta")
+            .setItems(emojis.toTypedArray()) { _, which ->
+                selectedEmoji = emojis[which]
+                binding.emojiPreview.text = selectedEmoji
+            }
+            .show()
+    }
+
+    /**
+     * Valida los campos y guarda la receta en la base de datos.
+     * 
+     * Realiza validaciones de:
+     * - Campos no vacíos
+     * - Selección de dropdown
+     * - Número de porciones válido
+     * 
+     * Si todo es válido, crea el objeto Recipe y lo inserta
+     * mediante el ViewModel, luego navega al inicio.
+     */
+    private fun saveRecipe() {
+        // Obtener valores de los campos
+        val name = binding.recipeNameInput.text.toString().trim()
+        val time = binding.recipeTimeInput.text.toString().trim()
+        val servingsStr = binding.recipeServingsInput.text.toString().trim()
+        val category = binding.recipeCategoryInput.text.toString().trim()
+        val difficulty = binding.recipeDifficultyInput.text.toString().trim()
+        val ingredients = binding.recipeIngredientsInput.text.toString().trim()
+        val instructions = binding.recipeInstructionsInput.text.toString().trim()
+
+        // Validar nombre
+        if (name.isEmpty()) {
+            binding.recipeNameInput.error = "El nombre es requerido"
+            return
+        }
+
+        // Validar tiempo
+        if (time.isEmpty()) {
+            binding.recipeTimeInput.error = "El tiempo es requerido"
+            return
+        }
+
+        // Validar porciones
+        if (servingsStr.isEmpty()) {
+            binding.recipeServingsInput.error = "Las porciones son requeridas"
+            return
+        }
+
+        // Validar categoría
+        if (category.isEmpty()) {
+            Toast.makeText(this, "Selecciona una categoría", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Validar dificultad
+        if (difficulty.isEmpty()) {
+            Toast.makeText(this, "Selecciona una dificultad", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Validar ingredientes
+        if (ingredients.isEmpty()) {
+            binding.recipeIngredientsInput.error = "Los ingredientes son requeridos"
+            return
+        }
+
+        // Validar preparación
+        if (instructions.isEmpty()) {
+            binding.recipeInstructionsInput.error = "La preparación es requerida"
+            return
+        }
+
+        // Convertir porciones a número
+        val servings = servingsStr.toIntOrNull() ?: 0
+        if (servings <= 0) {
+            binding.recipeServingsInput.error = "Número inválido"
+            return
+        }
+
+        // Crear objeto Recipe
+        val newRecipe = Recipe(
+            name = name,
+            category = category,
+            time = time,
+            servings = servings,
+            difficulty = difficulty,
+            ingredients = ingredients,
+            instructions = instructions,
+            imageUrl = selectedEmoji,
+            isFavorite = false
+        )
+
+        // Guardar en la base de datos
+        recipeViewModel.insert(newRecipe)
+
+        // Mostrar mensaje de éxito
+        Toast.makeText(this, "Receta guardada exitosamente ✅", Toast.LENGTH_SHORT).show()
+
+        // Volver a la pantalla principal
+        val intent = Intent(this, MainActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
+        startActivity(intent)
+        finish()
+    }
+
+    /**
+     * Configura el Bottom Navigation con el item actual seleccionado.
+     * 
+     * Permite navegar a otras secciones de la app desde esta pantalla.
+     */
+    private fun setupBottomNavigation() {
+        binding.bottomNavigation.selectedItemId = com.recetas.app.R.id.nav_add
+
+        binding.bottomNavigation.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                com.recetas.app.R.id.nav_home -> {
+                    startActivity(Intent(this, MainActivity::class.java))
+                    finish()
+                    true
+                }
+                com.recetas.app.R.id.nav_search -> {
+                    // Navegar a búsqueda
+                    true
+                }
+                com.recetas.app.R.id.nav_add -> true // Ya estamos aquí
+                com.recetas.app.R.id.nav_favorites -> {
+                    // Navegar a favoritos
+                    true
+                }
+                com.recetas.app.R.id.nav_profile -> {
+                    // Navegar a perfil
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+}
+```
+
+---
+
+
 🤝 Contribuir
 ¡Las contribuciones son bienvenidas! Si deseas mejorar RecetApp, sigue estos pasos:
 1. Fork del Repositorio
@@ -1098,7 +2709,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 📧 Contacto
-Desarrolladores
+Desarrolladores 4181445620 y 4272241382
 
 Cristian y David
 GitHub: @1224100540cujl-commits  @crizzz77
