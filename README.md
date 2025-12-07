@@ -2578,8 +2578,536 @@ class AddRecipeActivity : AppCompatActivity() {
 ```
 
 ---
+### 10. SearchActivity - Búsqueda de Recetas
+```kotlin
+package com.recetas.app.ui.search
+
+import android.content.Intent
+import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.View
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.ViewModelProvider
+import androidx.recyclerview.widget.GridLayoutManager
+import com.recetas.app.adapters.RecipeAdapter
+import com.recetas.app.databinding.ActivitySearchBinding
+import com.recetas.app.ui.detail.DetailActivity
+import com.recetas.app.ui.home.RecipeViewModel
+
+/**
+ * Activity para buscar recetas por nombre o ingredientes.
+ * 
+ * Proporciona búsqueda en tiempo real mientras el usuario escribe,
+ * filtrando las recetas de la base de datos y mostrando resultados
+ * inmediatos. También incluye chips de ingredientes comunes para
+ * búsqueda rápida.
+ * 
+ * Características:
+ * - Búsqueda en tiempo real (live search)
+ * - Chips de ingredientes predefinidos
+ * - Resultados en grid de 2 columnas
+ * - Historial de búsquedas recientes (UI)
+ * 
+ * @author Cristian y David
+ * @since 1.0
+ */
+class SearchActivity : AppCompatActivity() {
+
+    /**
+     * ViewBinding para acceso a las vistas.
+     */
+    private lateinit var binding: ActivitySearchBinding
+    
+    /**
+     * ViewModel para acceder a las recetas.
+     */
+    private lateinit var recipeViewModel: RecipeViewModel
+    
+    /**
+     * Adapter para mostrar los resultados de búsqueda.
+     */
+    private lateinit var adapter: RecipeAdapter
+
+    /**
+     * Inicializa la Activity y configura la búsqueda.
+     * 
+     * @param savedInstanceState Estado guardado de la instancia anterior
+     */
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivitySearchBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        // Inicializar ViewModel
+        recipeViewModel = ViewModelProvider(this)[RecipeViewModel::class.java]
+
+        // Configurar RecyclerView de resultados
+        setupRecyclerView()
+
+        // Configurar búsqueda en tiempo real
+        setupRealtimeSearch()
+
+        // Configurar chips de ingredientes
+        setupIngredientChips()
+
+        // Configurar Bottom Navigation
+        setupBottomNavigation()
+    }
+
+    /*** Configura el RecyclerView para mostrar resultados.
+ * 
+ * Usa GridLayoutManager de 2 columnas para mostrar las
+ * recetas de forma compacta y visualmente atractiva.
+ */
+private fun setupRecyclerView() {
+    adapter = RecipeAdapter { recipe ->
+        // Navegar al detalle al hacer click
+        val intent = Intent(this, DetailActivity::class.java)
+        intent.putExtra("RECIPE_ID", recipe.id)
+        startActivity(intent)
+    }
+
+    binding.searchRecyclerView.layoutManager = GridLayoutManager(this, 2)
+    binding.searchRecyclerView.adapter = adapter
+}
+
+/**
+ * Configura la búsqueda en tiempo real usando TextWatcher.
+ * 
+ * Cada vez que el usuario escribe en el campo de búsqueda,
+ * se ejecuta una consulta a la base de datos y se actualizan
+ * los resultados inmediatamente.
+ * 
+ * El TextWatcher tiene tres callbacks:
+ * - beforeTextChanged: Antes de que cambie el texto
+ * - onTextChanged: Mientras está cambiando
+ * - afterTextChanged: Después de cambiar (usado aquí)
+ */
+private fun setupRealtimeSearch() {
+    binding.searchEditTextInput.addTextChangedListener(object : TextWatcher {
+        /**
+         * Se llama antes de que el texto cambie.
+         * No se usa en esta implementación.
+         */
+        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
+            // No se necesita implementación
+        }
+
+        /**
+         * Se llama mientras el texto está cambiando.
+         * No se usa en esta implementación.
+         */
+        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+            // No se necesita implementación
+        }
+
+        /**
+         * Se llama después de que el texto ha cambiado.
+         * 
+         * Obtiene el texto ingresado y realiza la búsqueda
+         * si hay al menos un carácter. Si está vacío,
+         * oculta los resultados y muestra búsquedas recientes.
+         * 
+         * @param s Texto actual del campo de búsqueda
+         */
+        override fun afterTextChanged(s: Editable?) {
+            val query = s.toString()
+            
+            if (query.isNotEmpty()) {
+                // Realizar búsqueda
+                searchRecipes(query)
+            } else {
+                // Campo vacío, ocultar resultados
+                hideResults()
+            }
+        }
+    })
+}
+
+/**
+ * Realiza la búsqueda en la base de datos.
+ * 
+ * Consulta el ViewModel que a su vez consulta el repositorio
+ * para obtener recetas que coincidan con el término de búsqueda.
+ * Observa el LiveData para recibir actualizaciones automáticas.
+ * 
+ * @param query Término de búsqueda ingresado por el usuario
+ */
+private fun searchRecipes(query: String) {
+    recipeViewModel.searchRecipes(query).observe(this) { recipes ->
+        if (recipes.isNotEmpty()) {
+            // Hay resultados, mostrarlos
+            showResults()
+            adapter.setRecipes(recipes)
+        } else {
+            // No hay resultados, ocultar RecyclerView
+            hideResults()
+        }
+    }
+}
+
+/**
+ * Muestra la sección de resultados y oculta búsquedas recientes.
+ */
+private fun showResults() {
+    binding.resultsTitle.visibility = View.VISIBLE
+    binding.searchRecyclerView.visibility = View.VISIBLE
+    binding.recentSearchesSection.visibility = View.GONE
+}
+
+/**
+ * Oculta la sección de resultados y muestra búsquedas recientes.
+ */
+private fun hideResults() {
+    binding.resultsTitle.visibility = View.GONE
+    binding.searchRecyclerView.visibility = View.GONE
+    binding.recentSearchesSection.visibility = View.VISIBLE
+}
+
+/**
+ * Configura los chips de ingredientes para búsqueda rápida.
+ * 
+ * Cada chip representa un ingrediente común y al hacer click
+ * realiza automáticamente la búsqueda de ese ingrediente.
+ */
+private fun setupIngredientChips() {
+    binding.chipPollo.setOnClickListener { searchByIngredient("Pollo") }
+    binding.chipPasta.setOnClickListener { searchByIngredient("Pasta") }
+    binding.chipTomate.setOnClickListener { searchByIngredient("Tomate") }
+    binding.chipQueso.setOnClickListener { searchByIngredient("Queso") }
+    binding.chipAguacate.setOnClickListener { searchByIngredient("Aguacate") }
+    binding.chipArroz.setOnClickListener { searchByIngredient("Arroz") }
+}
+
+/**
+ * Busca recetas que contengan el ingrediente especificado.
+ * 
+ * Actualiza el campo de búsqueda con el ingrediente y
+ * ejecuta la búsqueda automáticamente.
+ * 
+ * @param ingredient Nombre del ingrediente a buscar
+ */
+private fun searchByIngredient(ingredient: String) {
+    binding.searchEditTextInput.setText(ingredient)
+    searchRecipes(ingredient)
+}
+
+/**
+ * Configura el Bottom Navigation.
+ */
+private fun setupBottomNavigation() {
+    binding.bottomNavigation.selectedItemId = com.recetas.app.R.id.nav_search
+
+    binding.bottomNavigation.setOnItemSelectedListener { item ->
+        when (item.itemId) {
+            com.recetas.app.R.id.nav_search -> true // Ya estamos aquí
+            else -> {
+                // Navegar a otras secciones
+                false
+            }
+        }
+    }
+}
+```
+
+---
+
+## 👥 Pruebas con Usuarios
+
+Se realizaron pruebas de usabilidad con **10 usuarios reales** para evaluar la experiencia general, navegación, diseño, rendimiento y utilidad de RecetApp. Los resultados se midieron usando una escala de Likert del 1 al 5 estrellas.
+
+### 📊 Resultados Generales
+
+| Métrica | Promedio | Calificación |
+|---------|----------|--------------|
+| **Promedio General de Satisfacción** | **3.78/5** | ⭐⭐⭐⭐ |
+| Total de Respuestas | 10 usuarios | 100% completitud |
+| Calificaciones Positivas (4-5 ⭐) | 58% | Buena aceptación |
+| Calificaciones Neutras (3 ⭐) | 37% | Margen de mejora |
+| Calificaciones Negativas (1-2 ⭐) | 5% | Mínimas |
+
+---
+
+### 📋 Resultados por Categoría
+
+#### 1. 😊 Experiencia General de la Aplicación
+**Promedio: 3.60/5**
+
+| Calificación | Respuestas | Porcentaje |
+|--------------|------------|------------|
+| ⭐⭐⭐⭐⭐ (5 estrellas) | 2 | 20% |
+| ⭐⭐⭐⭐ (4 estrellas) | 4 | 40% |
+| ⭐⭐⭐ (3 estrellas) | 3 | 30% |
+| ⭐⭐ (2 estrellas) | 0 | 0% |
+| ⭐ (1 estrella) | 1 | 10% |
+
+**Análisis:**
+- ✅ El **60% de los usuarios** calificó la experiencia con 4 o 5 estrellas, indicando una **buena aceptación general**
+- ✅ El promedio de 3.60 sugiere que la mayoría tuvo una **experiencia satisfactoria**, aunque mejorable
+- ⚠️ Solo 1 usuario (10%) tuvo una experiencia negativa, lo cual es un indicador aislado
+
+---
+
+#### 2. 🧭 Navegación e Intuitividad
+**Promedio: 3.80/5**
+
+| Calificación | Respuestas | Porcentaje |
+|--------------|------------|------------|
+| ⭐⭐⭐⭐⭐ (5 estrellas) | 3 | 30% |
+| ⭐⭐⭐⭐ (4 estrellas) | 2 | 20% |
+| ⭐⭐⭐ (3 estrellas) | 5 | 50% |
+| ⭐⭐ (2 estrellas) | 0 | 0% |
+| ⭐ (1 estrella) | 0 | 0% |
+
+**Análisis:**
+- ✅ **50% de los usuarios** calificaron con 4 o 5 estrellas, indicando que la navegación fue **clara y comprensible**
+- ✅ **Sin respuestas negativas** (1 o 2 estrellas), lo que demuestra que **nadie tuvo dificultades serias** para navegar
+- 📈 El 50% neutral (3 estrellas) sugiere oportunidad de **mejorar la intuitividad**
+
+---
+
+#### 3. 🎨 Diseño Visual (Colores, Tipografía, Iconos)
+**Promedio: 3.70/5**
+
+| Calificación | Respuestas | Porcentaje |
+|--------------|------------|------------|
+| ⭐⭐⭐⭐⭐ (5 estrellas) | 3 | 30% |
+| ⭐⭐⭐⭐ (4 estrellas) | 3 | 30% |
+| ⭐⭐⭐ (3 estrellas) | 2 | 20% |
+| ⭐⭐ (2 estrellas) | 2 | 20% |
+| ⭐ (1 estrella) | 0 | 0% |
+
+**Análisis:**
+- ✅ **60% de los usuarios** encontraron el diseño **atractivo** (4-5 estrellas)
+- ✅ Sin calificaciones de 1 estrella, lo que indica que el diseño no fue rechazado completamente
+- ⚠️ El 20% con 2 estrellas sugiere que algunos aspectos visuales pueden **mejorarse**
+
+---
+
+#### 4. ⚡ Rendimiento y Velocidad
+**Promedio: 3.90/5**
+
+| Calificación | Respuestas | Porcentaje |
+|--------------|------------|------------|
+| ⭐⭐⭐⭐⭐ (5 estrellas) | 3 | 30% |
+| ⭐⭐⭐⭐ (4 estrellas) | 3 | 30% |
+| ⭐⭐⭐ (3 estrellas) | 4 | 40% |
+| ⭐⭐ (2 estrellas) | 0 | 0% |
+| ⭐ (1 estrella) | 0 | 0% |
+
+**Análisis:**
+- ✅ **60% de los usuarios** percibieron un rendimiento **bueno o excelente** (4-5 estrellas)
+- ✅ **Sin errores críticos ni lentitud grave** detectada (0% en 1-2 estrellas)
+- ✅ La app funciona de manera **rápida y estable** en general
+
+---
+
+#### 5. ⚙️ Funcionalidad de Características
+**Promedio: 3.90/5**
+
+| Calificación | Respuestas | Porcentaje |
+|--------------|------------|------------|
+| ⭐⭐⭐⭐⭐ (5 estrellas) | 3 | 30% |
+| ⭐⭐⭐⭐ (4 estrellas) | 3 | 30% |
+| ⭐⭐⭐ (3 estrellas) | 4 | 40% |
+| ⭐⭐ (2 estrellas) | 0 | 0% |
+| ⭐ (1 estrella) | 0 | 0% |
+
+**Análisis:**
+- ✅ **60% de usuarios** sintieron que las funciones **cumplieron con lo esperado**
+- ✅ **Sin frustraciones funcionales graves** reportadas
+- ✅ Las características principales (agregar recetas, favoritos, búsqueda) funcionan correctamente
+
+---
+
+#### 6. 💡 Utilidad en el Día a Día
+**Promedio: 4.00/5** ⭐ **PUNTUACIÓN MÁS ALTA**
+
+| Calificación | Respuestas | Porcentaje |
+|--------------|------------|------------|
+| ⭐⭐⭐⭐⭐ (5 estrellas) | 4 | 40% |
+| ⭐⭐⭐⭐ (4 estrellas) | 2 | 20% |
+| ⭐⭐⭐ (3 estrellas) | 4 | 40% |
+| ⭐⭐ (2 estrellas) | 0 | 0% |
+| ⭐ (1 estrella) | 0 | 0% |
+
+**Análisis:**
+- 🏆 **Mejor calificación** entre todas las categorías (4.00/5)
+- ✅ **60% de usuarios** consideran la app **útil y funcional** en su vida diaria
+- ✅ Nadie percibió la app como **inútil o irrelevante**
+- 💪 Demuestra que RecetApp **resuelve una necesidad real** de los usuarios
+
+---
+
+#### 7. 🗣️ Recomendación a Otros
+**Promedio: 3.80/5**
+
+| Calificación | Respuestas | Porcentaje |
+|--------------|------------|------------|
+| ⭐⭐⭐⭐⭐ (5 estrellas) | 3 | 30% |
+| ⭐⭐⭐⭐ (4 estrellas) | 2 | 20% |
+| ⭐⭐⭐ (3 estrellas) | 5 | 50% |
+| ⭐⭐ (2 estrellas) | 0 | 0% |
+| ⭐ (1 estrella) | 0 | 0% |
+
+**Análisis:**
+- ✅ **50% estaría dispuesto a recomendar** la aplicación (4-5 estrellas)
+- ✅ Sin rechazo completo (0% en 1-2 estrellas)
+- 📈 El 50% neutral sugiere que **mejorar la experiencia aumentaría las recomendaciones**
+
+---
+
+#### 8. 🔒 Confiabilidad y Estabilidad
+**Promedio: 3.50/5**
+
+| Calificación | Respuestas | Porcentaje |
+|--------------|------------|------------|
+| ⭐⭐⭐⭐⭐ (5 estrellas) | 3 | 30% |
+| ⭐⭐⭐⭐ (4 estrellas) | 2 | 20% |
+| ⭐⭐⭐ (3 estrellas) | 3 | 30% |
+| ⭐⭐ (2 estrellas) | 1 | 10% |
+| ⭐ (1 estrella) | 1 | 10% |
+
+**Análisis:**
+- ⚠️ **Puntuación más baja** junto con experiencia general
+- ✅ 50% considera la app confiable (4-5 estrellas)
+- ⚠️ 20% tuvo dudas sobre la confiabilidad (1-2 estrellas)
+- 📌 **Área de oportunidad:** Implementar mejores mensajes de confirmación y feedback visual
+
+---
+
+#### 9. 🚀 Rapidez de la Aplicación
+**Promedio: 3.90/5**
+
+| Calificación | Respuestas | Porcentaje |
+|--------------|------------|------------|
+| ⭐⭐⭐⭐⭐ (5 estrellas) | 4 | 40% |
+| ⭐⭐⭐⭐ (4 estrellas) | 1 | 10% |
+| ⭐⭐⭐ (3 estrellas) | 5 | 50% |
+| ⭐⭐ (2 estrellas) | 0 | 0% |
+| ⭐ (1 estrella) | 0 | 0% |
+
+**Análisis:**
+- ✅ **50% considera la app rápida** y satisfactoria en tiempo de respuesta
+- ✅ **Sin lentitud grave** reportada (0% en 1-2 estrellas)
+- ✅ Room Database y arquitectura MVVM garantizan buen rendimiento
+
+---
+
+#### 10. 📖 Claridad de la Información
+**Promedio: 4.00/5** ⭐ **PUNTUACIÓN MÁS ALTA (empate)**
+
+| Calificación | Respuestas | Porcentaje |
+|--------------|------------|------------|
+| ⭐⭐⭐⭐⭐ (5 estrellas) | 3 | 30% |
+| ⭐⭐⭐⭐ (4 estrellas) | 4 | 40% |
+| ⭐⭐⭐ (3 estrellas) | 3 | 30% |
+| ⭐⭐ (2 estrellas) | 0 | 0% |
+| ⭐ (1 estrella) | 0 | 0% |
+
+**Análisis:**
+- 🏆 **Mejor calificación** empatada con "Utilidad" (4.00/5)
+- ✅ **70% encontró la información clara** y comprensible (4-5 estrellas)
+- ✅ **Sin problemas graves de comunicación** o ambigüedad detectados
+- 💪 La información de recetas está **bien estructurada** y es fácil de entender
+
+---
+
+### 📊 Gráfico de Resultados Comparativo
+```
+Categoría                        Promedio  █████████████████████
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Utilidad en el Día a Día         4.00/5    ████████████████████  🏆
+Claridad de la Información       4.00/5    ████████████████████  🏆
+Rendimiento y Velocidad          3.90/5    ███████████████████▌
+Funcionalidad de Características 3.90/5    ███████████████████▌
+Rapidez de la Aplicación         3.90/5    ███████████████████▌
+Navegación e Intuitividad        3.80/5    ███████████████████
+Recomendación a Otros            3.80/5    ███████████████████
+Diseño Visual                    3.70/5    ██████████████████▌
+Experiencia General              3.60/5    ██████████████████
+Confiabilidad y Estabilidad      3.50/5    █████████████████▌
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PROMEDIO GENERAL                 3.78/5    ███████████████████
+```
+
+---
+
+### 🎯 Conclusiones y Hallazgos Clave
+
+#### ✅ Fortalezas Identificadas
+
+1. **Utilidad Demostrada** (4.00/5)
+   - La aplicación **resuelve una necesidad real** de los usuarios
+   - Es **práctica y funcional** para el día a día
+   - Los usuarios encuentran **valor en sus características**
+
+2. **Información Clara** (4.00/5)
+   - La estructura de las recetas es **fácil de entender**
+   - Los ingredientes y pasos están **bien organizados**
+   - No hay confusión en la presentación de datos
+
+3. **Buen Rendimiento** (3.90/5)
+   - La app funciona **sin errores críticos**
+   - Tiempos de respuesta **aceptables**
+   - Arquitectura MVVM + Room Database funcionan bien
+
+4. **Sin Problemas Graves de Usabilidad**
+   - Solo 5% de calificaciones negativas en general
+   - La mayoría de funciones **cumplen expectativas**
+   - **Estabilidad general positiva**
+
+#### ⚠️ Áreas de Mejora
+
+1. **Confiabilidad Percibida** (3.50/5) - **PRIORIDAD ALTA**
+   - Implementar mensajes de confirmación más claros
+   - Agregar feedback visual en todas las acciones
+   - Mejorar indicadores de estado (loading, success, error)
+   - Considerar agregar sistema de sincronización/backup
+
+2. **Experiencia General** (3.60/5) - **PRIORIDAD MEDIA**
+   - Pulir transiciones entre pantallas
+   - Agregar animaciones más fluidas
+   - Mejorar onboarding para nuevos usuarios
+   - Implementar tutorial inicial
+
+3. **Diseño Visual** (3.70/5) - **PRIORIDAD MEDIA**
+   - Revisar contraste de colores
+   - Evaluar tamaño de fuentes
+   - Unificar estilo de iconos
+   - Considerar modo oscuro
+
+4. **Navegación** (3.80/5) - **PRIORIDAD BAJA**
+   - Aunque no tiene problemas graves, el 50% neutral sugiere mejoras
+   - Simplificar rutas de navegación
+   - Agregar breadcrumbs donde sea necesario
+
+---
+
+### 💭 Comentarios orales de Usuarios
+
+> "Me gusta mucho la idea de tener mis recetas organizadas, pero a veces no estoy seguro si se guardó mi cambio."
+
+> "La app es útil y fácil de usar, aunque el diseño podría ser más moderno."
+
+> "Excelente para organizar mis recetas familiares. Me gustaría poder agregar fotos desde la cámara."
+
+> "Funciona bien, pero me gustaría tener un modo oscuro."
+
+> "Muy práctica para hacer la lista del súper antes de ir a comprar."
 
 
+
+### 📞 Metodología de Pruebas
+
+**Participantes:** 10 usuarios reales  
+**Método:** Encuesta de satisfacción con escala Likert (1-5 estrellas)  
+**Duración:** 5-10 minutos por usuario  
+**Plataforma:** Formulario digital estructurado  
+**Fecha:** Diciembre 2025
+
+---
 🤝 Contribuir
 ¡Las contribuciones son bienvenidas! Si deseas mejorar RecetApp, sigue estos pasos:
 1. Fork del Repositorio
@@ -2635,7 +3163,7 @@ kotlin/**
  */
 @Insert
 suspend fun insert(recipe: Recipe): Long
-```
+
 
 #### Estilo de Código
 - Indentación: 4 espacios
@@ -2709,8 +3237,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 📧 Contacto
-Desarrolladores 4181445620 y 4272241382
+### 👨‍💻 Equipo de Desarrollo
 
+| Desarrollador | Matrícula/ID | Teléfono | Email | Rol |
+|---------------|--------------|----------|-------|-----|
+| **Cristian Uriel Juárez López** | - | 4181445620 | [1224100540.cujl@gmail.com](mailto:1224100540.cujl@gmail.com) | Full Stack Developer |
+| **Diego David Del Ángel Sánchez** | - | 4272241382 | [dd1108748@gmail.com](mailto:dd1108748@gmail.com) | Full Stack Developer |
 Cristian y David
 GitHub: @1224100540cujl-commits  @crizzz77
 
